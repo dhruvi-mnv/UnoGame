@@ -15,10 +15,14 @@ public class GameOfCards {
     List<Card> deck;
     List<Player> players;
     Card topCard;
-
+    List<Card> discardPile;
+    boolean clockwise;
+    
     GameOfCards() {
         deck = new ArrayList<>();
         players = new ArrayList<>();
+        discardPile = new ArrayList<>();
+        clockwise = true;
         createDeck();
         shuffleDeck();
     }
@@ -44,6 +48,15 @@ public class GameOfCards {
     void shuffleDeck() {
         Collections.shuffle(deck);
     }
+    
+    void reshuffleDeck() {
+        if (!discardPile.isEmpty()) {
+            deck.addAll(discardPile);
+            discardPile.clear();
+            shuffleDeck();
+            System.out.println("Deck reshuffled from discard pile.");
+        }
+    }
 
     void dealCards(int numCards) {
         for (Player player : players) {
@@ -60,23 +73,53 @@ public class GameOfCards {
     boolean isValidPlay(Card card) {
         return card.color.equals(topCard.color) || card.value.equals(topCard.value) || card.color.equals("Wild");
     }
-
+    
+    private void applySpecialCardEffect(Card playedCard, int currentPlayerIndex) {
+    if (playedCard.value.equals("Draw Two")) {
+        int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
+        for (int i = 0; i < 2; i++) {
+            players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
+        }
+    } else if (playedCard.value.equals("Wild Draw Four")) {
+        int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
+        for (int i = 0; i < 4; i++) {
+            players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
+        }
+    } else if (playedCard.color.equals("Wild")) {
+        Scanner scanner = new Scanner(System.in);  // Initialize the scanner here
+        System.out.print("Choose a color (Red, Green, Blue, Yellow): ");
+        String chosenColor = scanner.nextLine();
+        topCard = new Card(chosenColor, playedCard.value);
+        }
+    }
+    
+    private void displayScores() {
+        System.out.println("\nFinal Scores:");
+        for (Player player : players) {
+            player.calculateScore(); // Make sure to calculate score before displaying it
+            System.out.println(player.name + "'s score: " + player.score);
+        }
+    }
+    
     public void startGame() {
         Scanner scanner = new Scanner(System.in);
-        
+
         System.out.print("How many players are you: ");
         int numPlayers = scanner.nextInt();
-        scanner.nextLine(); // Consume newline
+        scanner.nextLine();
 
         for (int i = 0; i < numPlayers; i++) {
             System.out.print("Insert the name of player " + (i + 1) + ": ");
             String name = scanner.nextLine();
             addPlayer(new Player(name));
         }
+        
+        dealCards(7);
 
-        dealCards(7); // Deal 7 cards to each player
+        int currentPlayerIndex = 0;
+        int roundCount = 0;
 
-        // Draw a valid starting card (not skip, reverse, draw two, wild, or wild draw four)
+        // Draw a valid starting card (not skip, reverse, etc.)
         do {
             topCard = deck.remove(deck.size() - 1);
         } while (topCard.value.equals("Skip") || topCard.value.equals("Reverse") || 
@@ -84,86 +127,94 @@ public class GameOfCards {
 
         System.out.println("Starting card: " + topCard);
 
-        int currentPlayerIndex = 0;
         boolean gameOn = true;
-
         while (gameOn) {
             Player currentPlayer = players.get(currentPlayerIndex);
-            System.out.println(currentPlayer.name + "'s turn:");
-            System.out.println(currentPlayer);
+            System.out.println("\n" + currentPlayer.name + "'s turn:");
             System.out.println("Top card: " + topCard);
-            Card playedCard = null;
+            
+            // Display the player's hand
+            System.out.println("Your hand: " + currentPlayer.hand);
+
             boolean validPlay = false;
 
             while (!validPlay) {
-                System.out.print("Ask for a card to play (e.g., 'Red 5') or type 'draw' to pick a card: ");
+                System.out.print("Play a card (e.g., 'Red 5') or type 'draw' to pick a card: ");
                 String input = scanner.nextLine();
 
                 if (input.equalsIgnoreCase("draw")) {
+                    
+                    
+                    if (deck.isEmpty()) {
+                        reshuffleDeck(); // Reshuffle if deck is empty
+                    }
                     if (!deck.isEmpty()) {
                         Card drawnCard = deck.remove(deck.size() - 1);
                         currentPlayer.drawCard(drawnCard);
-                        System.out.println(currentPlayer.name + " drew a card: " + drawnCard);
-                        // Check if the drawn card can be played
+                        System.out.println(currentPlayer.name + " drew: " + drawnCard);
+
+                        // Check if drawn card is valid to play immediately
                         if (isValidPlay(drawnCard)) {
-                            System.out.print("You can play the drawn card! Play it? (yes/no): ");
+                            System.out.print("Play the drawn card? (yes/no): ");
                             if (scanner.nextLine().equalsIgnoreCase("yes")) {
-                                playedCard = drawnCard;
-                                validPlay = true; // Exit the loop on valid play
+                                currentPlayer.playCard(drawnCard);
+                                topCard = drawnCard;
+                                validPlay = true;
+                                System.out.println("Played: " + drawnCard);
+
+                                applySpecialCardEffect(drawnCard, currentPlayerIndex);
                             }
                         }
-                    } else {
-                        System.out.println("Deck is empty! You cannot draw.");
-                        validPlay = true; // End turn
-                    }
+                    } 
+                    validPlay = true; // Turn ends after drawing
                 } else {
+                    // Try to play a specific card from hand
                     String[] cardInput = input.split(" ");
                     if (cardInput.length == 2) {
-                        playedCard = new Card(cardInput[0], cardInput[1]);
-                        if (isValidPlay(playedCard)) {
-                            currentPlayer.playCard(playedCard); // Remove played card from hand
-                            topCard = playedCard; // Update top card
-                            System.out.println("Played: " + playedCard);
-                            validPlay = true; // Exit the loop on valid play
+                        String color = cardInput[0];
+                        String value = cardInput[1];
+                        Card playedCard = new Card(color, value);
 
-                            // Handle special cards
-                            if (playedCard.value.equals("Draw Two")) {
-                                int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
-                                for (int i = 0; i < 2; i++) {
-                                    players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
-                                }
-                            } else if (playedCard.value.equals("Wild Draw Four")) {
-                                int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
-                                for (int i = 0; i < 4; i++) {
-                                    players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
-                                }
-                            } else if (playedCard.value.equals("Skip")) {
-                                currentPlayerIndex = (currentPlayerIndex + 1) % players.size(); // Skip the next player's turn
-                            }
+                        if (currentPlayer.hasCard(playedCard) && isValidPlay(playedCard)) {
+                            currentPlayer.playCard(playedCard);
+                            topCard = playedCard;
+                            validPlay = true;
+                            System.out.println("Played: " + playedCard);
+
+                            applySpecialCardEffect(playedCard, currentPlayerIndex);
                         } else {
-                            System.out.println("Invalid play! Try again.");
+                            System.out.println("Invalid play. Try again.");
                         }
                     } else {
-                        System.out.println("Invalid input! Please enter in the format 'Color Value'.");
+                        System.out.println("Invalid input format! Enter 'Color Value' or 'draw'.");
                     }
                 }
             }
-
-            if (currentPlayer.hasUno()) {
-                System.out.println(currentPlayer.name + " has UNO!");
-            }
-
-            // Check for win
+            
+          
+            // Check if current player has won
             if (currentPlayer.hand.isEmpty()) {
-                System.out.println(currentPlayer.name + " wins!");
-                gameOn = false; // End game
+                System.out.println(currentPlayer.name + " wins the game!");
+                gameOn = false;
+                break;
+            }
+            
+            // Increment the round counter and check if 4 rounds have been completed
+            roundCount++;
+            if (roundCount >= numPlayers * 4) {
+                System.out.println("\nGame over! 4 rounds have been completed.");
+                gameOn = false;
+                break;
             }
 
-            // Move to next player
-            currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+            // Advance to next player
+            currentPlayerIndex = (currentPlayerIndex + (clockwise ? 1 : -1) + players.size()) % players.size();
         }
+        
+        // Display final scores after the game ends
+        displayScores();
 
         scanner.close();
     }
-}
 
+ }
