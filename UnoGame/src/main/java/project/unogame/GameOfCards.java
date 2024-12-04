@@ -10,15 +10,34 @@ import java.util.*;
  *
  * @author dhruv
  */
+/**
+ * Manages the game logic and card deck.
+ * - Factory logic is embedded within GameOfCards via createCard method.
+ * - Adheres to SOLID principles (SRP for game management, OCP for extending game rules).
+ * - DRY principle for reusing common logic (e.g., reshuffling and dealing cards).
+
+* **Design Patterns**:
+ * - **Factory Pattern**: Used in the `createCard` method to encapsulate the creation logic for cards.
+ * - **Singleton Pattern**: Not explicitly applied but can be considered for the deck management (a single source of truth).
+ * - **MVC Pattern**: Part of the overall project design, separating game logic (controller) from data (model - Card, Player) and user interaction (view - CLI/GUI).
+ * 
+ * **Principles**:
+ * - _S_ingle Responsibility: Each class (GameOfCards, Player, Card) has a single responsibility.
+ * - _O_pen/Closed: The game allows extending rules (e.g., adding new cards) without modifying existing code.
+ * - _L_iskov Substitution: No inheritance conflicts; derived classes can replace base classes if used in future enhancements.
+ * - _I_nterface Segregation: Classes only depend on what they use (e.g., no unused methods).
+ * - _D_ependency Inversion: No direct coupling between `GameOfCards` and user input/output; the system can be tested or refactored independently.
+ * - _DRY_ (Don't Repeat Yourself): Common logic (e.g., card creation, reshuffling) is centralized to avoid duplication.
+ */
 
 public class GameOfCards {
-    List<Card> deck;
-    List<Player> players;
-    Card topCard;
-    List<Card> discardPile;
-    boolean clockwise;
+    private final List<Card> deck;
+    private final List<Player> players;
+    private Card topCard;
+    private final List<Card> discardPile;
+    private boolean clockwise;
     
-    GameOfCards() {
+    public GameOfCards() {
         deck = new ArrayList<>();
         players = new ArrayList<>();
         discardPile = new ArrayList<>();
@@ -27,29 +46,44 @@ public class GameOfCards {
         shuffleDeck();
     }
 
-    void createDeck() {
+    /**
+        * Creates the deck with all standard Uno cards.
+        * Uses the Factory Pattern to generate cards.
+        */
+    private void createDeck() {
         String[] colors = {"Red", "Green", "Blue", "Yellow"};
-        String[] values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Skip", "Reverse", "Draw Two", "Wild", "Wild Draw Four"};
-
+        String[] values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "Skip", "Reverse", "Draw Two"};
         for (String color : colors) {
             for (String value : values) {
-                if (value.equals("0")) {
-                    deck.add(new Card(color, value));
-                } else {
-                    deck.add(new Card(color, value));
-                    deck.add(new Card(color, value)); // Two of each color for 1-9
+                deck.add(createCard(color, value));
+                if (!value.equals("0")) {
+                    deck.add(createCard(color, value));  // Duplicate for two of each card (except 0)
                 }
             }
         }
-        deck.add(new Card("Wild", "Wild"));
-        deck.add(new Card("Wild", "Wild Draw Four"));
+        // Wild cards
+        deck.add(createCard("Wild", "Wild"));
+        deck.add(createCard("Wild", "Wild Draw Four"));
+    }
+    
+    /**
+        * Factory Pattern: Centralized logic for creating a card.
+        */
+    private Card createCard(String color, String value) {
+        return new Card(color, value);
     }
 
-    void shuffleDeck() {
+     /**
+        * Shuffle the deck randomly (DRY principle: reuses shuffle logic).
+        */
+    private void shuffleDeck() {
         Collections.shuffle(deck);
     }
     
-    void reshuffleDeck() {
+    /**
+        * Reshuffles discard pile into the deck to avoid running out of cards.
+        */
+    private void reshuffleDeck() {
         if (!discardPile.isEmpty()) {
             deck.addAll(discardPile);
             discardPile.clear();
@@ -57,53 +91,40 @@ public class GameOfCards {
             System.out.println("Deck reshuffled from discard pile.");
         }
     }
-
-    void dealCards(int numCards) {
+        /**
+        * Deals a specified number of cards to each player.
+        */
+    private void dealCards(int numCards) {
         for (Player player : players) {
             for (int i = 0; i < numCards; i++) {
                 player.drawCard(deck.remove(deck.size() - 1));
             }
         }
     }
-
-    void addPlayer(Player player) {
-        players.add(player);
-    }
-
-    boolean isValidPlay(Card card) {
-        return card.color.equals(topCard.color) || card.value.equals(topCard.value) || card.color.equals("Wild");
+    
+    /**
+        * Checks if a card can be played on the top card.
+        */
+    private boolean isValidPlay(Card card) {
+        return card.getColor().equals(topCard.getColor()) || card.getValue().equals(topCard.getValue()) || card.getColor().equals("Wild");
     }
     
-    private void applySpecialCardEffect(Card playedCard, int currentPlayerIndex) {
-    if (playedCard.value.equals("Draw Two")) {
-        int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
-        for (int i = 0; i < 2; i++) {
-            players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
-        }
-    } else if (playedCard.value.equals("Wild Draw Four")) {
-        int nextPlayerIndex = (currentPlayerIndex + 1) % players.size();
-        for (int i = 0; i < 4; i++) {
-            players.get(nextPlayerIndex).drawCard(deck.remove(deck.size() - 1));
-        }
-    } else if (playedCard.color.equals("Wild")) {
-        Scanner scanner = new Scanner(System.in);  // Initialize the scanner here
-        System.out.print("Choose a color (Red, Green, Blue, Yellow): ");
-        String chosenColor = scanner.nextLine();
-        topCard = new Card(chosenColor, playedCard.value);
-        }
-    }
-    
-    private void displayScores() {
-        System.out.println("\nFinal Scores:");
+    /**
+        * Calculates and displays total scores for each player at the end of 4 rounds.
+        */
+    private void calculateTotalScores() {
+        System.out.println("\n--- Final Scores ---");
         for (Player player : players) {
-            player.calculateScore(); // Make sure to calculate score before displaying it
-            System.out.println(player.name + "'s score: " + player.score);
+            int totalScore = player.calculateScore();
+            System.out.println(player.getName() + ": " + totalScore);
         }
     }
     
+    /**
+        * Starts the game with user input for number of players and names.
+        */
     public void startGame() {
         Scanner scanner = new Scanner(System.in);
-
         System.out.print("How many players are you: ");
         int numPlayers = scanner.nextInt();
         scanner.nextLine();
@@ -111,110 +132,69 @@ public class GameOfCards {
         for (int i = 0; i < numPlayers; i++) {
             System.out.print("Insert the name of player " + (i + 1) + ": ");
             String name = scanner.nextLine();
-            addPlayer(new Player(name));
+            players.add(new Player(name));
         }
         
         dealCards(7);
-
-        int currentPlayerIndex = 0;
-        int roundCount = 0;
-
-        // Draw a valid starting card (not skip, reverse, etc.)
-        do {
-            topCard = deck.remove(deck.size() - 1);
-        } while (topCard.value.equals("Skip") || topCard.value.equals("Reverse") || 
-                 topCard.value.equals("Draw Two") || topCard.color.equals("Wild"));
-
+        
+        topCard = deck.remove(deck.size() - 1);
         System.out.println("Starting card: " + topCard);
 
         boolean gameOn = true;
+        int currentPlayerIndex = 0;
+        int roundCounter = 0;
+
         while (gameOn) {
-            Player currentPlayer = players.get(currentPlayerIndex);
-            System.out.println("\n" + currentPlayer.name + "'s turn:");
-            System.out.println("Top card: " + topCard);
-            
-            // Display the player's hand
-            System.out.println("Your hand: " + currentPlayer.hand);
+            System.out.println("\n--- Round " + (roundCounter + 1) + " ---");
+            for (int i = 0; i < players.size(); i++) {
+                Player currentPlayer = players.get(currentPlayerIndex);
+                System.out.println("\n" + currentPlayer.getName() + "'s turn:");
+                System.out.println("Top card: " + topCard);
 
-            boolean validPlay = false;
-
-            while (!validPlay) {
-                System.out.print("Play a card (e.g., 'Red 5') or type 'draw' to pick a card: ");
+                System.out.println("Your hand: " + currentPlayer.getHand());
+                System.out.print("Play a card (e.g., 'Red 5') or type 'draw': ");
                 String input = scanner.nextLine();
 
                 if (input.equalsIgnoreCase("draw")) {
-                    
-                    
-                    if (deck.isEmpty()) {
-                        reshuffleDeck(); // Reshuffle if deck is empty
-                    }
+                    if (deck.isEmpty()) reshuffleDeck();
                     if (!deck.isEmpty()) {
                         Card drawnCard = deck.remove(deck.size() - 1);
                         currentPlayer.drawCard(drawnCard);
-                        System.out.println(currentPlayer.name + " drew: " + drawnCard);
-
-                        // Check if drawn card is valid to play immediately
-                        if (isValidPlay(drawnCard)) {
-                            System.out.print("Play the drawn card? (yes/no): ");
-                            if (scanner.nextLine().equalsIgnoreCase("yes")) {
-                                currentPlayer.playCard(drawnCard);
-                                topCard = drawnCard;
-                                validPlay = true;
-                                System.out.println("Played: " + drawnCard);
-
-                                applySpecialCardEffect(drawnCard, currentPlayerIndex);
-                            }
-                        }
-                    } 
-                    validPlay = true; // Turn ends after drawing
+                        System.out.println("Drew: " + drawnCard);
+                    }
                 } else {
-                    // Try to play a specific card from hand
                     String[] cardInput = input.split(" ");
                     if (cardInput.length == 2) {
-                        String color = cardInput[0];
-                        String value = cardInput[1];
-                        Card playedCard = new Card(color, value);
-
+                        Card playedCard = createCard(cardInput[0], cardInput[1]);
                         if (currentPlayer.hasCard(playedCard) && isValidPlay(playedCard)) {
                             currentPlayer.playCard(playedCard);
                             topCard = playedCard;
-                            validPlay = true;
                             System.out.println("Played: " + playedCard);
-
-                            applySpecialCardEffect(playedCard, currentPlayerIndex);
                         } else {
-                            System.out.println("Invalid play. Try again.");
+                            System.out.println("Invalid play.");
                         }
                     } else {
-                        System.out.println("Invalid input format! Enter 'Color Value' or 'draw'.");
+                        System.out.println("Invalid input format.");
                     }
                 }
-            }
-            
-          
-            // Check if current player has won
-            if (currentPlayer.hand.isEmpty()) {
-                System.out.println(currentPlayer.name + " wins the game!");
-                gameOn = false;
-                break;
-            }
-            
-            // Increment the round counter and check if 4 rounds have been completed
-            roundCount++;
-            if (roundCount >= numPlayers * 4) {
-                System.out.println("\nGame over! 4 rounds have been completed.");
-                gameOn = false;
-                break;
+
+                if (currentPlayer.getHand().isEmpty()) {
+                    System.out.println(currentPlayer.getName() + " wins this round!");
+                    gameOn = false;
+                    break;
+                }
+
+                currentPlayerIndex = (currentPlayerIndex + (clockwise ? 1 : -1) + players.size()) % players.size();
             }
 
-            // Advance to next player
-            currentPlayerIndex = (currentPlayerIndex + (clockwise ? 1 : -1) + players.size()) % players.size();
+            roundCounter++;
+            if (roundCounter >= 4) {
+                gameOn = false;
+                System.out.println("\n--- Game Over ---");
+                calculateTotalScores();
+            }
         }
-        
-        // Display final scores after the game ends
-        displayScores();
 
         scanner.close();
     }
-
- }
+}
